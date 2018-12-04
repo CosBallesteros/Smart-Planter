@@ -1,0 +1,107 @@
+#include "Arduino.h"
+#include "SoftwareSerial.h"
+#include "DFRobotDFPlayerMini.h"
+//ALTAVOZ
+SoftwareSerial mySoftwareSerial(6, 5); // RX, TX
+DFRobotDFPlayerMini myDFPlayer;
+void printDetail(uint8_t type, int value);
+
+#include <Stepper.h> //Importamos la librería para controlar motores paso a paso
+#define STEPS 200 //Ponemos el número de pasos que necesita para dar una vuelta. 200 en nuestro caso
+//PAS A PAS: nombre del motor, el número de pasos y los pins de control
+Stepper stepper(STEPS, 8, 10, 9, 11); //Stepper nombre motor (número de pasos por vuelta, pins de control)
+//DECLARAR PINS DEL LED Y BOTÓN
+int led = 13 ;  // Led conectado al pin
+int button = 12 ;
+//DECLARAR VARIABLES DEL SENOR HUMEDAD
+int humeValue;
+int humedad;
+int sensorHumedad = A0;//Conectat al port A0
+//DECLARAR PIN BOMBA PERISTALTICA
+const int bomba = A1; // definir on es troba la bomba persitaltica
+//ESTADOS DEL LED Y ALTAVOZ
+boolean buttonState = true ;
+boolean buttonState2 = true ;
+//MENCIONAR T (TIEMPO REAL)
+unsigned long t = 0;
+
+void setup() {
+  //SETUP DEL LED
+  pinMode(button, INPUT);
+  pinMode(led, OUTPUT);
+
+  //ALTAVOZ
+  mySoftwareSerial.begin(9600);
+  Serial.begin(9600);
+  
+
+  if (!myDFPlayer.begin(mySoftwareSerial)) {  //Use softwareSerial to communicate with mp3.
+    Serial.println(F("Unable to begin:"));
+  }
+  Serial.println(F("DFPlayer Mini online."));
+
+  myDFPlayer.volume(30);  //Set volume value. From 0 to 30
+  myDFPlayer.play(1);  //Play the first mp3
+  
+
+  //SETUP DEL BOMBA/SENSOR
+  pinMode(bomba, OUTPUT);
+  Serial.begin(9600);  /// sensor humitat
+
+  //SETUP DEL PAS A PAS
+  stepper.setSpeed(100);
+
+}
+
+void loop() {
+  // FUNCIONAMIENTO DEL LED
+  buttonState = digitalRead(button);
+
+  if (buttonState != buttonState2) {    //hay cambio, se ha pulsado o soltado
+
+    if (buttonState == LOW)            //Al pulsar botón cambiar LED, pero no al soltar
+      digitalWrite(led, !digitalRead(led)); //Que el led haga lo contrario, si está pagado que se encienda y viceversa
+
+    //ALTAVOZ
+    if (digitalRead(led) == HIGH) {
+      myDFPlayer.start();  //Play next mp3 every 3 second.
+    } else {
+      myDFPlayer.pause();  //Play next mp3 every 3 second.
+
+    }
+
+    buttonState2 = buttonState ;     // Para recordar el ultimo valor
+  }
+
+  if (millis() - t > 3000) {  // tiempo real
+
+    // FUNCIONAMIENTO DEL SENSOR DE HUMEDAD
+    humeValue = analogRead (sensorHumedad);
+    humedad = (100.0 * humeValue) / 1024;
+    Serial.print ("Humedad:");  //Per saber el valor de humitat
+    Serial.println (humedad);
+
+    if ( humedad <= 21) {  //Si la humedad es menor de 21
+      digitalWrite(bomba, LOW); //Bomba apagada
+      Serial.println("No debe regar"); //No saca agua
+    }
+    else {
+
+      digitalWrite(bomba, HIGH);  //Bomba encendida
+      Serial.println("Debe regar"); //Saca agua
+
+      //FUNCIONAMENTO PAS A PAS
+      //Girar una vuelta entera en un sentido
+      stepper.step(1200);
+      //delay(100); //Pequeña pausa antes de girar hacia el otro sentido
+
+      //Girar una vuelta entera en sentido contrario
+      stepper.step(-1200); // giro hacia el otro sentido
+    }
+    t = millis(); // volver al tiempo real (abans del loop)
+  }
+}
+
+//FUNCIONAMIENTO ALTAVOZ
+void printDetail(uint8_t type, int value) {
+}
